@@ -36,6 +36,7 @@ type SecondaryContext struct {
 }
 
 type PropertyTemplate struct {
+	ID       string `json:"id"`
 	Name     string `json:"name"`
 	Type     string `json:"type"`
 	Template string `json:"template"`
