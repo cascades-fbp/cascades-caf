@@ -5,7 +5,7 @@ type Property struct {
 	ID          string                 `json:"id"`
 	Type        string                 `json:"type"`
 	Name        string                 `json:"n"`
-	Timestamp   int                    `json:"t"`
+	Timestamp   int64                  `json:"t"`
 	Value       float64                `json:"v"`
 	BoolValue   bool                   `json:"bv"`
 	StringValue string                 `json:"sv"`
