@@ -9,7 +9,7 @@ type Property struct {
 	Value       float64                `json:"v"`
 	BoolValue   bool                   `json:"bv"`
 	StringValue string                 `json:"sv"`
-	JsonValue   map[string]interface{} `"json:"json"`
+	JsonValue   map[string]interface{} `json:"jv"`
 }
 
 // Describes a context (primary or secondary)
