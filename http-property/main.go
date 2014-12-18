@@ -245,7 +245,6 @@ func main() {
 			prop := &caf.Property{
 				ID:        propTemplate.ID,
 				Name:      propTemplate.Name,
-				Type:      propTemplate.Type,
 				Group:     propTemplate.Group,
 				Timestamp: &ts,
 			}
@@ -274,11 +273,11 @@ func main() {
 			}
 
 			switch propTemplate.Type {
-			case "string":
+			case caf.PropTypeString:
 				v := buf.String()
 				prop.StringValue = &v
 
-			case "float":
+			case caf.PropTypeFloat:
 				v, err := strconv.ParseFloat(buf.String(), 64)
 				prop.Value = &v
 				if err != nil {
@@ -286,7 +285,7 @@ func main() {
 					continue
 				}
 
-			case "bool":
+			case caf.PropTypeBool:
 				v, err := strconv.ParseBool(buf.String())
 				prop.BoolValue = &v
 				if err != nil {
@@ -294,7 +293,7 @@ func main() {
 					continue
 				}
 
-			case "json":
+			case caf.PropTypeJSON:
 				err = json.Unmarshal(buf.Bytes(), prop.JSONValue)
 
 				if err != nil {

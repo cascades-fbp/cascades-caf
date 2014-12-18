@@ -1,9 +1,15 @@
 package caf
 
+const (
+	PropTypeFloat  = "float"
+	PropTypeBool   = "bool"
+	PropTypeString = "string"
+	PropTypeJSON   = "json"
+)
+
 // Describes a context property
 type Property struct {
 	ID          string                  `json:"id"`
-	Type        string                  `json:"type"`
 	Group       string                  `json:"group"`
 	Name        string                  `json:"n"`
 	Timestamp   *int64                  `json:"t,omitempty"`
