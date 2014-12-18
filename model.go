@@ -3,14 +3,13 @@ package caf
 // Describes a context property
 type Property struct {
 	ID          string                 `json:"id"`
-	Type        string                 `json:"type"`
 	Group       string                 `json:"group"`
 	Name        string                 `json:"n"`
-	Timestamp   int64                  `json:"t"`
-	Value       float64                `json:"v"`
-	BoolValue   bool                   `json:"bv"`
-	StringValue string                 `json:"sv"`
-	JsonValue   map[string]interface{} `json:"jv"`
+	Timestamp   int64                  `json:"t,omitempty"`
+	Value       float64                `json:"v,omitempty"`
+	BoolValue   bool                   `json:"bv,omitempty"`
+	StringValue string                 `json:"sv,omitempty"`
+	JsonValue   map[string]interface{} `json:"jv,omitempty"`
 }
 
 // Describes a context (primary or secondary)
