@@ -241,12 +241,13 @@ func main() {
 				buf  bytes.Buffer
 				out  []byte
 			)
+			ts := time.Now().Unix()
 			prop := &caf.Property{
 				ID:        propTemplate.ID,
 				Name:      propTemplate.Name,
 				Type:      propTemplate.Type,
 				Group:     propTemplate.Group,
-				Timestamp: time.Now().Unix(),
+				Timestamp: &ts,
 			}
 
 			tmpl, err := template.New("value").Parse(propTemplate.Template)
@@ -274,24 +275,28 @@ func main() {
 
 			switch propTemplate.Type {
 			case "string":
-				prop.StringValue = buf.String()
+				v := buf.String()
+				prop.StringValue = &v
 
 			case "float":
-				prop.Value, err = strconv.ParseFloat(buf.String(), 64)
+				v, err := strconv.ParseFloat(buf.String(), 64)
+				prop.Value = &v
 				if err != nil {
 					log.Println("ERROR parsing float:", err.Error())
 					continue
 				}
 
 			case "bool":
-				prop.BoolValue, err = strconv.ParseBool(buf.String())
+				v, err := strconv.ParseBool(buf.String())
+				prop.BoolValue = &v
 				if err != nil {
 					log.Println("ERROR parsing bool:", err.Error())
 					continue
 				}
 
 			case "json":
-				err = json.Unmarshal(buf.Bytes(), &prop.JsonValue)
+				err = json.Unmarshal(buf.Bytes(), prop.JSONValue)
+
 				if err != nil {
 					log.Println("ERROR marshaling the result in JSON:", err.Error())
 					continue
