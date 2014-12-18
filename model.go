@@ -4,6 +4,7 @@ package caf
 type Property struct {
 	ID          string                 `json:"id"`
 	Type        string                 `json:"type"`
+	Group       string                 `json:"group"`
 	Name        string                 `json:"n"`
 	Timestamp   int64                  `json:"t"`
 	Value       float64                `json:"v"`
@@ -39,5 +40,6 @@ type PropertyTemplate struct {
 	ID       string `json:"id"`
 	Name     string `json:"name"`
 	Type     string `json:"type"`
+	Group    string `json:"group"`
 	Template string `json:"template"`
 }

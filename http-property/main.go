@@ -245,6 +245,7 @@ func main() {
 				ID:        propTemplate.ID,
 				Name:      propTemplate.Name,
 				Type:      propTemplate.Type,
+				Group:     propTemplate.Group,
 				Timestamp: time.Now().Unix(),
 			}
 

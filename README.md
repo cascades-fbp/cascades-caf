@@ -18,7 +18,8 @@ Using HttpProperty with the [system agent](https://github.com/patchwork-toolkit/
 '{
 	"type": "float",	
 	"name": "ProcessCount",
-	"template": "{{ .count }}"
+	"template": "{{ .count }}",
+	"group": "SystemA"
 }' -> TMPL HttpProperty
 
 
