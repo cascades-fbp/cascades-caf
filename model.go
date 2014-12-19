@@ -1,5 +1,6 @@
 package caf
 
+// Constants
 const (
 	PropTypeFloat  = "float"
 	PropTypeBool   = "bool"
@@ -7,7 +8,7 @@ const (
 	PropTypeJSON   = "json"
 )
 
-// Describes a context property
+// Property describes a context property
 type Property struct {
 	ID          string                  `json:"id"`
 	Group       string                  `json:"group"`
@@ -19,7 +20,7 @@ type Property struct {
 	JSONValue   *map[string]interface{} `json:"jv,omitempty"`
 }
 
-// Describes a context (primary or secondary)
+// Context describes a context (primary or secondary)
 type Context struct {
 	ID          string        `json:"id"`
 	Name        string        `json:"name"`
@@ -30,18 +31,19 @@ type Context struct {
 	Entries     []interface{} `json:"e"`
 }
 
-// Describes a primary (consisting of properties) context
+// PrimaryContext describes a primary (consisting of properties) context
 type PrimaryContext struct {
 	*Context
 	Entries []Property `json:"e"`
 }
 
-// Describes a primary (consisting of properties) context
+// SecondaryContext describes a primary (consisting of properties) context
 type SecondaryContext struct {
 	*Context
 	Entries []Context `json:"e"`
 }
 
+// PropertyTemplate is used to configure *-property components
 type PropertyTemplate struct {
 	ID       string `json:"id"`
 	Name     string `json:"name"`

@@ -34,7 +34,7 @@ var (
 	debug            = flag.Bool("debug", false, "Enable debug mode")
 )
 
-type RequestIP struct {
+type requestIP struct {
 	URL         string              `json:"url"`
 	Method      string              `json:"method"`
 	ContentType string              `json:"content-type"`
@@ -145,7 +145,7 @@ func main() {
 	var (
 		interval     time.Duration
 		ip           [][]byte
-		request      *RequestIP
+		request      *requestIP
 		propTemplate *caf.PropertyTemplate
 		httpRequest  *http.Request
 	)
