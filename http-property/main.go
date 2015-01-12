@@ -6,13 +6,13 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"html/template"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
 	"strconv"
 	"strings"
+	"text/template"
 	"time"
 
 	caf "github.com/cascades-fbp/cascades-caf"
@@ -279,19 +279,19 @@ func main() {
 
 			case caf.PropTypeFloat:
 				v, err := strconv.ParseFloat(buf.String(), 64)
-				prop.Value = &v
 				if err != nil {
 					log.Println("ERROR parsing float:", err.Error())
 					continue
 				}
+				prop.Value = &v
 
 			case caf.PropTypeBool:
 				v, err := strconv.ParseBool(buf.String())
-				prop.BoolValue = &v
 				if err != nil {
 					log.Println("ERROR parsing bool:", err.Error())
 					continue
 				}
+				prop.BoolValue = &v
 
 			case caf.PropTypeJSON:
 				err = json.Unmarshal(buf.Bytes(), prop.JSONValue)
