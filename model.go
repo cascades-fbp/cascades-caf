@@ -5,19 +5,17 @@ const (
 	PropTypeFloat  = "float"
 	PropTypeBool   = "bool"
 	PropTypeString = "string"
-	PropTypeJSON   = "json"
 )
 
 // Property describes a context property
 type Property struct {
-	ID          string                  `json:"id"`
-	Name        string                  `json:"n"`
-	Group       string                  `json:"g"`
-	Timestamp   *int64                  `json:"t,omitempty"`
-	Value       *float64                `json:"v,omitempty"`
-	BoolValue   *bool                   `json:"bv,omitempty"`
-	StringValue *string                 `json:"sv,omitempty"`
-	JSONValue   *map[string]interface{} `json:"jv,omitempty"`
+	ID          string   `json:"id"`
+	Name        string   `json:"n"`
+	Group       string   `json:"g"`
+	Timestamp   *int64   `json:"t,omitempty"`
+	Value       *float64 `json:"v,omitempty"`
+	BoolValue   *bool    `json:"bv,omitempty"`
+	StringValue *string  `json:"sv,omitempty"`
 }
 
 // Context describes a context (primary or secondary)
