@@ -293,14 +293,6 @@ func main() {
 				}
 				prop.BoolValue = &v
 
-			case caf.PropTypeJSON:
-				err = json.Unmarshal(buf.Bytes(), prop.JSONValue)
-
-				if err != nil {
-					log.Println("ERROR marshaling the result in JSON:", err.Error())
-					continue
-				}
-
 			default:
 				log.Printf("WARNING marshaling to %s is not supported", propTemplate.Type)
 				continue
