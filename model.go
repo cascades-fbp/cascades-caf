@@ -11,8 +11,8 @@ const (
 // Property describes a context property
 type Property struct {
 	ID          string                  `json:"id"`
-	Group       string                  `json:"group"`
 	Name        string                  `json:"n"`
+	Group       string                  `json:"g"`
 	Timestamp   *int64                  `json:"t,omitempty"`
 	Value       *float64                `json:"v,omitempty"`
 	BoolValue   *bool                   `json:"bv,omitempty"`
@@ -24,6 +24,7 @@ type Property struct {
 type Context struct {
 	ID          string        `json:"id"`
 	Name        string        `json:"name"`
+	Group       string        `json:"group"`
 	Description string        `json:"description"`
 	Rule        string        `json:"rule"`
 	Matching    bool          `json:"matching"`
