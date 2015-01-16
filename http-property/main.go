@@ -187,7 +187,7 @@ func main() {
 					log.Println("ERROR: failed to unmarshal template:", err.Error())
 					continue
 				}
-				log.Println("Template specified:", propTemplate)
+				log.Printf("Template specified: %+v", propTemplate)
 
 			default:
 				log.Println("ERROR: IP from unhandled socket received!")
