@@ -239,7 +239,7 @@ func main() {
 			continue
 		}
 
-		if !runtime.IsValidIP(ip) {
+		if !runtime.IsValidIP(ip) || !runtime.IsPacket(ip) {
 			log.Println("Received invalid IP")
 			continue
 		}
@@ -270,7 +270,7 @@ func main() {
 				log.Println("Error receiving message:", err.Error())
 				continue
 			}
-			if !runtime.IsValidIP(ip) {
+			if !runtime.IsValidIP(ip) || !runtime.IsPacket(ip) {
 				log.Println("Received invalid IP")
 				continue
 			}

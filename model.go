@@ -39,22 +39,6 @@ type Context struct {
 	Entries     []interface{} `json:"entries"`
 }
 
-// ContextTemplate is used to configure the context component
-type ContextTemplate struct {
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	Condition   string `json:"condition"`
-}
-
-// PropertyTemplate is used to configure *-property components
-type PropertyTemplate struct {
-	ID       string `json:"id"`
-	Name     string `json:"name"`
-	Type     string `json:"type"`
-	Group    string `json:"group"`
-	Template string `json:"template"`
-}
-
 // GetValue returns the value of a Property (the one that is set)
 func (p *Property) GetValue() (interface{}, error) {
 	if p.Value != nil && p.BoolValue != nil && p.StringValue != nil {

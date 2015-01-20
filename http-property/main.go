@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"crypto/tls"
 	"encoding/json"
 	"flag"
@@ -10,10 +9,8 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"strconv"
 	"strings"
 	"syscall"
-	"text/template"
 	"time"
 
 	caf "github.com/cascades-fbp/cascades-caf"
@@ -56,12 +53,6 @@ func assertError(err error) {
 }
 
 func validateArgs() {
-	if *jsonFlag {
-		doc, _ := registryEntry.JSON()
-		fmt.Println(string(doc))
-		os.Exit(0)
-	}
-
 	if *requestEndpoint == "" || *templateEndpoint == "" {
 		flag.Usage()
 		os.Exit(1)
@@ -69,13 +60,6 @@ func validateArgs() {
 	if *propertyEndpoint == "" && *responseEndpoint == "" && *bodyEndpoint == "" {
 		flag.Usage()
 		os.Exit(1)
-	}
-
-	log.SetFlags(0)
-	if *debug {
-		log.SetOutput(os.Stdout)
-	} else {
-		log.SetOutput(ioutil.Discard)
 	}
 }
 
@@ -137,6 +121,19 @@ func closePorts() {
 func main() {
 	flag.Parse()
 
+	if *jsonFlag {
+		doc, _ := registryEntry.JSON()
+		fmt.Println(string(doc))
+		os.Exit(0)
+	}
+
+	log.SetFlags(0)
+	if *debug {
+		log.SetOutput(os.Stdout)
+	} else {
+		log.SetOutput(ioutil.Discard)
+	}
+
 	validateArgs()
 
 	// Ctrl+C handling
@@ -154,7 +151,7 @@ func main() {
 				waitCh <- true
 			}
 			if !v {
-				log.Println("All output ports are closed. Interrupting execution")
+				log.Println("One of output ports is closed. Interrupting execution")
 				ch <- syscall.SIGTERM
 			}
 		}
@@ -207,7 +204,7 @@ func main() {
 				log.Println("Error receiving message:", err.Error())
 				continue
 			}
-			if !runtime.IsValidIP(ip) {
+			if !runtime.IsValidIP(ip) || !runtime.IsPacket(ip) {
 				log.Println("Invalid IP:", ip)
 				continue
 			}
@@ -277,24 +274,7 @@ func main() {
 
 		// Property output socket
 		if propPort != nil {
-			var (
-				data interface{}
-				buf  bytes.Buffer
-				out  []byte
-			)
-			ts := time.Now().Unix()
-			prop := &caf.Property{
-				ID:        propTemplate.ID,
-				Name:      propTemplate.Name,
-				Group:     propTemplate.Group,
-				Timestamp: &ts,
-			}
-
-			tmpl, err := template.New("value").Parse(propTemplate.Template)
-			if err != nil {
-				log.Println("ERROR parsing the template:", err.Error())
-				continue
-			}
+			var data interface{}
 			if strings.HasSuffix(request.ContentType, "json") {
 				err = json.Unmarshal(resp.Body, &data)
 				if err != nil {
@@ -307,38 +287,13 @@ func main() {
 				continue
 			}
 
-			err = tmpl.Execute(&buf, data)
+			prop, err := propTemplate.Fill(data)
 			if err != nil {
-				log.Println("ERROR executing the template:", err.Error())
+				log.Println("ERROR filling template with data: ", err.Error())
 				continue
 			}
 
-			switch propTemplate.Type {
-			case caf.PropTypeString:
-				v := buf.String()
-				prop.StringValue = &v
-
-			case caf.PropTypeFloat:
-				v, err := strconv.ParseFloat(buf.String(), 64)
-				if err != nil {
-					log.Println("ERROR parsing float:", err.Error())
-					continue
-				}
-				prop.Value = &v
-
-			case caf.PropTypeBool:
-				v, err := strconv.ParseBool(buf.String())
-				if err != nil {
-					log.Println("ERROR parsing bool:", err.Error())
-					continue
-				}
-				prop.BoolValue = &v
-
-			default:
-				log.Printf("WARNING marshaling to %s is not supported", propTemplate.Type)
-				continue
-			}
-			out, _ = json.Marshal(prop)
+			out, _ := json.Marshal(prop)
 			propPort.SendMessage(runtime.NewPacket(out))
 		}
 
