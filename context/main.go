@@ -9,6 +9,7 @@ import (
 	"log"
 	"os"
 	"strings"
+	"syscall"
 	"time"
 
 	caf "github.com/cascades-fbp/cascades-caf"
@@ -32,6 +33,7 @@ var (
 	poller                                *zmq.Poller
 	tmplPort, updPort, matchPort, errPort *zmq.Socket
 	err                                   error
+	outCh                                 chan bool
 	ctxTemplate                           caf.ContextTemplate
 	contexts                              map[string]*caf.Context
 )
@@ -81,8 +83,8 @@ func openPorts() {
 
 	for i, endpoint := range dataports {
 		endpoint = strings.TrimSpace(endpoint)
-		log.Printf("Connecting OUT[%v]=%s", i, endpoint)
-		port, err := utils.CreateInputPort(endpoint)
+		log.Printf("Connecting DATA[%v]=%s", i, endpoint)
+		port, err := utils.CreateInputPort(fmt.Sprintf("context.data-%s", i), endpoint, nil)
 		utils.AssertError(err)
 
 		dataPortsArray = append(dataPortsArray, port)
@@ -90,24 +92,24 @@ func openPorts() {
 	}
 
 	// Template
-	tmplPort, err = utils.CreateInputPort(*templateEndpoint)
+	tmplPort, err = utils.CreateInputPort("context.tmpl", *templateEndpoint, nil)
 	utils.AssertError(err)
 
 	// Update
 	if *updatedEndpoint != "" {
-		updPort, err = utils.CreateOutputPort(*updatedEndpoint)
+		updPort, err = utils.CreateOutputPort("context.update", *updatedEndpoint, outCh)
 		utils.AssertError(err)
 	}
 
 	// Match
 	if *matchedEndpoint != "" {
-		matchPort, err = utils.CreateOutputPort(*matchedEndpoint)
+		matchPort, err = utils.CreateOutputPort("context.match", *matchedEndpoint, outCh)
 		utils.AssertError(err)
 	}
 
 	// Error
 	if *errorEndpoint != "" {
-		errPort, err = utils.CreateOutputPort(*errorEndpoint)
+		errPort, err = utils.CreateOutputPort("context.err", *errorEndpoint, nil)
 		utils.AssertError(err)
 	}
 }
@@ -196,13 +198,37 @@ func main() {
 	flag.Parse()
 
 	validateArgs()
+
+	// Ctrl+C handling
+	ch := utils.HandleInterruption()
+	outCh = make(chan bool)
+
 	openPorts()
 	defer closePorts()
 
-	// Ctrl+C handling
-	utils.HandleInterruption()
+	waitCh := make(chan bool)
+	go func() {
+		for {
+			v := <-outCh
+			if v && waitCh != nil {
+				waitCh <- true
+			}
+			if !v {
+				log.Println("All output ports are closed. Interrupting execution")
+				ch <- syscall.SIGTERM
+			}
+		}
+	}()
 
-	//TODO: setup input ports monitoring to close sockets when upstreams are disconnected
+	log.Println("Waiting for port connections to establish... ")
+	select {
+	case <-waitCh:
+		log.Println("One of the output ports is connected")
+		waitCh = nil
+	case <-time.Tick(30 * time.Second):
+		log.Println("Timeout: port connections were not established within provided interval")
+		os.Exit(1)
+	}
 
 	contexts = make(map[string]*caf.Context)
 	var ip [][]byte

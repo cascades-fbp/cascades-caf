@@ -12,6 +12,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"syscall"
 	"text/template"
 	"time"
 
@@ -32,6 +33,12 @@ var (
 	errorEndpoint    = flag.String("port.err", "", "Component's error port endpoint")
 	jsonFlag         = flag.Bool("json", false, "Print component documentation in JSON")
 	debug            = flag.Bool("debug", false, "Enable debug mode")
+
+	// Internal
+	intPort, reqPort, tmplPort            *zmq.Socket
+	propPort, respPort, bodyPort, errPort *zmq.Socket
+	outCh                                 chan bool
+	err                                   error
 )
 
 type requestIP struct {
@@ -48,9 +55,7 @@ func assertError(err error) {
 	}
 }
 
-func main() {
-	flag.Parse()
-
+func validateArgs() {
 	if *jsonFlag {
 		doc, _ := registryEntry.JSON()
 		fmt.Println(string(doc))
@@ -72,68 +77,104 @@ func main() {
 	} else {
 		log.SetOutput(ioutil.Discard)
 	}
+}
 
+func openPorts() {
 	var err error
-
-	defer zmq.Term()
 
 	// Input sockets
 	// Interval socket
-	intSock, err := utils.CreateInputPort(*intervalEndpoint)
-	assertError(err)
-	defer intSock.Close()
+	intPort, err = utils.CreateInputPort("http-property.int", *intervalEndpoint, nil)
+	utils.AssertError(err)
 
 	// Request socket
-	reqSock, err := utils.CreateInputPort(*requestEndpoint)
-	assertError(err)
-	defer reqSock.Close()
+	reqPort, err = utils.CreateInputPort("http-property.req", *requestEndpoint, nil)
+	utils.AssertError(err)
 
 	// Property template socket
-	tmplSock, err := utils.CreateInputPort(*templateEndpoint)
-	assertError(err)
-	defer tmplSock.Close()
+	tmplPort, err = utils.CreateInputPort("http-property.tmpl", *templateEndpoint, nil)
+	utils.AssertError(err)
 
 	// Output sockets
 	// Property socket
-	var propSock *zmq.Socket
 	if *propertyEndpoint != "" {
-		propSock, err = utils.CreateOutputPort(*propertyEndpoint)
-		assertError(err)
-		defer propSock.Close()
+		propPort, err = utils.CreateOutputPort("http-property.prop", *propertyEndpoint, outCh)
+		utils.AssertError(err)
 	}
 
 	// Response socket
-	var respSock *zmq.Socket
 	if *responseEndpoint != "" {
-		respSock, err = utils.CreateOutputPort(*responseEndpoint)
-		assertError(err)
-		defer respSock.Close()
+		respPort, err = utils.CreateOutputPort("http-property.resp", *responseEndpoint, outCh)
+		utils.AssertError(err)
 	}
+
 	// Response body socket
-	var bodySock *zmq.Socket
 	if *bodyEndpoint != "" {
-		bodySock, err = utils.CreateOutputPort(*bodyEndpoint)
-		assertError(err)
-		defer bodySock.Close()
+		bodyPort, err = utils.CreateOutputPort("http-property.body", *bodyEndpoint, outCh)
+		utils.AssertError(err)
 	}
+
 	// Error socket
-	var errSock *zmq.Socket
 	if *errorEndpoint != "" {
-		errSock, err = utils.CreateOutputPort(*errorEndpoint)
-		assertError(err)
-		defer errSock.Close()
+		errPort, err = utils.CreateOutputPort("http-property.err", *errorEndpoint, outCh)
+		utils.AssertError(err)
+
 	}
+}
+
+func closePorts() {
+	intPort.Close()
+	reqPort.Close()
+	tmplPort.Close()
+	propPort.Close()
+	respPort.Close()
+	bodyPort.Close()
+	errPort.Close()
+
+	zmq.Term()
+}
+
+func main() {
+	flag.Parse()
+
+	validateArgs()
 
 	// Ctrl+C handling
-	utils.HandleInterruption()
+	ch := utils.HandleInterruption()
+	outCh = make(chan bool)
 
-	//TODO: setup input ports monitoring to close sockets when upstreams are disconnected
+	openPorts()
+	defer closePorts()
+
+	waitCh := make(chan bool)
+	go func() {
+		for {
+			v := <-outCh
+			if v && waitCh != nil {
+				waitCh <- true
+			}
+			if !v {
+				log.Println("All output ports are closed. Interrupting execution")
+				ch <- syscall.SIGTERM
+			}
+		}
+	}()
+
+	log.Println("Waiting for port connections to establish... ")
+	select {
+	case <-waitCh:
+		log.Println("One of the output ports is connected")
+		waitCh = nil
+	case <-time.Tick(30 * time.Second):
+		log.Println("Timeout: port connections were not established within provided interval")
+		os.Exit(1)
+	}
 
 	// Setup socket poll items
 	poller := zmq.NewPoller()
-	poller.Add(intSock, zmq.POLLIN)
-	poller.Add(reqSock, zmq.POLLIN)
-	poller.Add(tmplSock, zmq.POLLIN)
+	poller.Add(intPort, zmq.POLLIN)
+	poller.Add(reqPort, zmq.POLLIN)
+	poller.Add(tmplPort, zmq.POLLIN)
 
 	// This is obviously dangerous but we need it to deal with our custom CA's
 	tr := &http.Transport{
@@ -171,17 +212,17 @@ func main() {
 				continue
 			}
 			switch socket.Socket {
-			case intSock:
+			case intPort:
 				interval, err = time.ParseDuration(string(ip[1]))
 				log.Println("Interval specified:", interval)
-			case reqSock:
+			case reqPort:
 				err = json.Unmarshal(ip[1], &request)
 				if err != nil {
 					log.Println("ERROR: failed to unmarshal request:", err.Error())
 					continue
 				}
 				log.Println("Request specified:", request)
-			case tmplSock:
+			case tmplPort:
 				err = json.Unmarshal(ip[1], &propTemplate)
 				if err != nil {
 					log.Println("ERROR: failed to unmarshal template:", err.Error())
@@ -204,7 +245,7 @@ func main() {
 	ticker := time.NewTicker(interval)
 	for _ = range ticker.C {
 		httpRequest, err = http.NewRequest(request.Method, request.URL, nil)
-		assertError(err)
+		utils.AssertError(err)
 
 		// Set the accepted Content-Type
 		if request.ContentType != "" {
@@ -219,8 +260,8 @@ func main() {
 		response, err := client.Do(httpRequest)
 		if err != nil {
 			log.Printf("ERROR performing HTTP %s %s: %s\n", request.Method, request.URL, err.Error())
-			if errSock != nil {
-				errSock.SendMessageDontwait(runtime.NewPacket([]byte(err.Error())))
+			if errPort != nil {
+				errPort.SendMessageDontwait(runtime.NewPacket([]byte(err.Error())))
 			}
 			continue
 		}
@@ -228,14 +269,14 @@ func main() {
 		resp, err := httputils.Response2Response(response)
 		if err != nil {
 			log.Println("ERROR converting response to reply:", err.Error())
-			if errSock != nil {
-				errSock.SendMessageDontwait(runtime.NewPacket([]byte(err.Error())))
+			if errPort != nil {
+				errPort.SendMessageDontwait(runtime.NewPacket([]byte(err.Error())))
 			}
 			continue
 		}
 
 		// Property output socket
-		if propSock != nil {
+		if propPort != nil {
 			var (
 				data interface{}
 				buf  bytes.Buffer
@@ -298,23 +339,23 @@ func main() {
 				continue
 			}
 			out, _ = json.Marshal(prop)
-			propSock.SendMessage(runtime.NewPacket(out))
+			propPort.SendMessage(runtime.NewPacket(out))
 		}
 
 		// Extra output sockets (e.g., for debugging)
-		if respSock != nil {
+		if respPort != nil {
 			ip, err = httputils.Response2IP(resp)
 			if err != nil {
 				log.Println("ERROR converting reply to IP:", err.Error())
-				if errSock != nil {
-					errSock.SendMessageDontwait(runtime.NewPacket([]byte(err.Error())))
+				if errPort != nil {
+					errPort.SendMessageDontwait(runtime.NewPacket([]byte(err.Error())))
 				}
 			} else {
-				respSock.SendMessage(ip)
+				respPort.SendMessage(ip)
 			}
 		}
-		if bodySock != nil {
-			bodySock.SendMessage(runtime.NewPacket(resp.Body))
+		if bodyPort != nil {
+			bodyPort.SendMessage(runtime.NewPacket(resp.Body))
 		}
 	}
 }
