@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"os/signal"
 	"strings"
 	"syscall"
 	"time"
@@ -33,7 +34,9 @@ var (
 	poller                                *zmq.Poller
 	tmplPort, updPort, matchPort, errPort *zmq.Socket
 	err                                   error
+	inCh                                  chan bool
 	outCh                                 chan bool
+	exitCh                                chan os.Signal
 	ctxTemplate                           caf.ContextTemplate
 	contexts                              map[string]*caf.Context
 )
@@ -46,12 +49,6 @@ type rawData struct {
 }
 
 func validateArgs() {
-	if *jsonFlag {
-		doc, _ := registryEntry.JSON()
-		fmt.Println(string(doc))
-		os.Exit(0)
-	}
-
 	if *dataEndpoint == "" || *templateEndpoint == "" {
 		flag.Usage()
 		os.Exit(1)
@@ -60,13 +57,6 @@ func validateArgs() {
 	if *updatedEndpoint == "" && *matchedEndpoint == "" {
 		flag.Usage()
 		os.Exit(1)
-	}
-
-	log.SetFlags(0)
-	if *debug {
-		log.SetOutput(os.Stdout)
-	} else {
-		log.SetOutput(ioutil.Discard)
 	}
 }
 
@@ -84,7 +74,7 @@ func openPorts() {
 	for i, endpoint := range dataports {
 		endpoint = strings.TrimSpace(endpoint)
 		log.Printf("Connecting DATA[%v]=%s", i, endpoint)
-		port, err := utils.CreateInputPort(fmt.Sprintf("context.data-%s", i), endpoint, nil)
+		port, err := utils.CreateInputPort(fmt.Sprintf("context.data-%s", i), endpoint, inCh)
 		utils.AssertError(err)
 
 		dataPortsArray = append(dataPortsArray, port)
@@ -197,25 +187,66 @@ func updateContext(i int, data []byte) (*caf.Context, error) {
 func main() {
 	flag.Parse()
 
+	if *jsonFlag {
+		doc, _ := registryEntry.JSON()
+		fmt.Println(string(doc))
+		os.Exit(0)
+	}
+
+	log.SetFlags(0)
+	if *debug {
+		log.SetOutput(os.Stdout)
+	} else {
+		log.SetOutput(ioutil.Discard)
+	}
+
 	validateArgs()
 
-	// Ctrl+C handling
-	ch := utils.HandleInterruption()
+	// Communication channels
+	inCh = make(chan bool)
 	outCh = make(chan bool)
+	exitCh = make(chan os.Signal, 1)
 
+	// Start the communication & processing logic
+	go mainLoop()
+
+	// Wait for the end...
+	signal.Notify(exitCh, os.Interrupt, syscall.SIGTERM)
+	<-exitCh
+
+	log.Println("Done")
+}
+
+func mainLoop() {
 	openPorts()
 	defer closePorts()
 
 	waitCh := make(chan bool)
 	go func() {
+		totalIn := 0
+		totalOut := 0
 		for {
-			v := <-outCh
-			if v && waitCh != nil {
-				waitCh <- true
+			select {
+			case v := <-inCh:
+				if !v {
+					log.Println("IN port is closed. Interrupting execution")
+					exitCh <- syscall.SIGTERM
+					break
+				} else {
+					totalIn++
+				}
+			case v := <-outCh:
+				if !v {
+					log.Println("OUT port is closed. Interrupting execution")
+					exitCh <- syscall.SIGTERM
+					break
+				} else {
+					totalOut++
+				}
 			}
-			if !v {
-				log.Println("All output ports are closed. Interrupting execution")
-				ch <- syscall.SIGTERM
+
+			if totalIn >= 1 && totalOut >= 1 && waitCh != nil {
+				waitCh <- true
 			}
 		}
 	}()

@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"strings"
 	"syscall"
 	"time"
@@ -35,6 +36,7 @@ var (
 	intPort, reqPort, tmplPort            *zmq.Socket
 	propPort, respPort, bodyPort, errPort *zmq.Socket
 	outCh                                 chan bool
+	exitCh                                chan os.Signal
 	err                                   error
 )
 
@@ -136,23 +138,40 @@ func main() {
 
 	validateArgs()
 
-	// Ctrl+C handling
-	ch := utils.HandleInterruption()
+	// Communication channels
 	outCh = make(chan bool)
+	exitCh = make(chan os.Signal, 1)
 
+	// Start the communication & processing logic
+	go mainLoop()
+
+	// Wait for the end...
+	signal.Notify(exitCh, os.Interrupt, syscall.SIGTERM)
+	<-exitCh
+
+	log.Println("Done")
+}
+
+// mainLoop initiates all ports and handles the traffic
+func mainLoop() {
 	openPorts()
 	defer closePorts()
 
 	waitCh := make(chan bool)
 	go func() {
+		total := 0
 		for {
 			v := <-outCh
-			if v && waitCh != nil {
-				waitCh <- true
-			}
 			if !v {
-				log.Println("One of output ports is closed. Interrupting execution")
-				ch <- syscall.SIGTERM
+				log.Println("An OUT port is closed. Interrupting execution")
+				exitCh <- syscall.SIGTERM
+				break
+			} else {
+				total++
+			}
+			// At least one output ports are opened
+			if total >= 1 && waitCh != nil {
+				waitCh <- true
 			}
 		}
 	}()
@@ -160,7 +179,7 @@ func main() {
 	log.Println("Waiting for port connections to establish... ")
 	select {
 	case <-waitCh:
-		log.Println("One of the output ports is connected")
+		log.Println("Ports connected")
 		waitCh = nil
 	case <-time.Tick(30 * time.Second):
 		log.Println("Timeout: port connections were not established within provided interval")

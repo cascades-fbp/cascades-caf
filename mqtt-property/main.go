@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"os/signal"
 	"strings"
 	"syscall"
 	"time"
@@ -33,6 +34,7 @@ var (
 	propTemplate                          *caf.PropertyTemplate
 	options                               optionsIP
 	outCh                                 chan bool
+	exitCh                                chan os.Signal
 	err                                   error
 )
 
@@ -100,22 +102,40 @@ func main() {
 
 	validateArgs()
 
-	ch := utils.HandleInterruption()
+	// Communication channels
 	outCh = make(chan bool)
+	exitCh = make(chan os.Signal, 1)
 
+	// Start the communication & processing logic
+	go mainLoop()
+
+	// Wait for the end...
+	signal.Notify(exitCh, os.Interrupt, syscall.SIGTERM)
+	<-exitCh
+
+	log.Println("Done")
+}
+
+// mainLoop initiates all ports and handles the traffic
+func mainLoop() {
 	openPorts()
 	defer closePorts()
 
 	waitCh := make(chan bool)
 	go func() {
+		total := 0
 		for {
 			v := <-outCh
-			if v && waitCh != nil {
-				waitCh <- true
-			}
 			if !v {
-				log.Println("The output port is closed. Interrupting execution")
-				ch <- syscall.SIGTERM
+				log.Println("An OUT port is closed. Interrupting execution")
+				exitCh <- syscall.SIGTERM
+				break
+			} else {
+				total++
+			}
+			// At least one output ports are opened
+			if total >= 1 && waitCh != nil {
+				waitCh <- true
 			}
 		}
 	}()
